@@ -1,150 +1,275 @@
-// State management
-let supabase = null;
+// ============================================
+// V-Safe Admin Portal - App Logic
+// ============================================
+
+// Use a different variable name to avoid shadowing window.supabase from CDN
+let sbClient = null;
 let currentTab = 'dashboard';
 let galleryItems = [];
 let videoItems = [];
 
-// DOM Elements
-const navItems = document.querySelectorAll('.nav-item');
-const tabContents = document.querySelectorAll('.tab-content');
-const pageTitle = document.getElementById('page-title');
-const uploadModal = document.getElementById('upload-modal');
-const videoModal = document.getElementById('video-modal');
-const configForm = document.getElementById('config-form');
-const uploadForm = document.getElementById('upload-form');
-const videoForm = document.getElementById('video-form');
-const fileInput = document.getElementById('file-input');
-const dropArea = document.getElementById('drop-area');
-const filePreview = document.getElementById('file-preview');
+// Default Supabase credentials
+const DEFAULT_SUPA_URL = 'https://doqquwlomcaqtabwrqpy.supabase.co';
+const DEFAULT_SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvcXF1d2xvbWNhcXRhYndycXB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNTQ4NTcsImV4cCI6MjA5MzkzMDg1N30.bSX1gqAcR61yF_UXfXxrmNIi4P756fvU7D9WZzRQ4Dk';
 
-// Initialize App
-function init() {
-    loadConfig();
-    setupEventListeners();
-    if (supabase) {
+// ============================================
+// Initialize App — runs on DOMContentLoaded
+// ============================================
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('[V-Safe Admin] Initializing...');
+
+    // Render icons first
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+        console.log('[V-Safe Admin] Lucide icons rendered.');
+    } else {
+        console.warn('[V-Safe Admin] Lucide not loaded!');
+    }
+
+    // Initialize Supabase
+    initSupabase();
+
+    // Setup all event listeners
+    setupNavigation();
+    setupModals();
+    setupConfigForm();
+    setupUploadForm();
+    setupVideoForm();
+    setupFilters();
+
+    // Load data if connected
+    if (sbClient) {
+        console.log('[V-Safe Admin] Supabase connected. Loading data...');
         refreshData();
     } else {
+        console.warn('[V-Safe Admin] No Supabase connection. Showing settings.');
         switchTab('settings');
-        alert('Please configure your Supabase settings first.');
     }
-}
+});
 
-// Load Supabase Config from LocalStorage
-function loadConfig() {
-    let url = null;
-    let key = null;
-    
+// ============================================
+// Supabase Connection
+// ============================================
+function initSupabase() {
+    let url = DEFAULT_SUPA_URL;
+    let key = DEFAULT_SUPA_KEY;
+
+    // Try to get from localStorage (user may have overridden)
     try {
-        url = localStorage.getItem('supa_url');
-        key = localStorage.getItem('supa_key');
+        const storedUrl = localStorage.getItem('supa_url');
+        const storedKey = localStorage.getItem('supa_key');
+        if (storedUrl && storedKey) {
+            url = storedUrl;
+            key = storedKey;
+        }
     } catch (e) {
-        console.warn('localStorage not accessible', e);
+        console.warn('[V-Safe Admin] localStorage not available:', e);
     }
-    
-    // Fallback to configured keys if not in localStorage
-    if (!url || !key) {
-        url = 'https://doqquwlomcaqtabwrqpy.supabase.co';
-        key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvcXF1d2xvbWNhcXRhYndycXB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNTQ4NTcsImV4cCI6MjA5MzkzMDg1N30.bSX1gqAcR61yF_UXfXxrmNIi4P756fvU7D9WZzRQ4Dk';
-        try {
-            localStorage.setItem('supa_url', url);
-            localStorage.setItem('supa_key', key);
-        } catch (e) {
-            console.warn('Could not save to localStorage', e);
+
+    // Fill settings form fields
+    const urlInput = document.getElementById('supa-url');
+    const keyInput = document.getElementById('supa-key');
+    if (urlInput) urlInput.value = url;
+    if (keyInput) keyInput.value = key;
+
+    // Create client
+    try {
+        if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+            sbClient = window.supabase.createClient(url, key);
+            console.log('[V-Safe Admin] Supabase client created successfully.');
+        } else {
+            console.error('[V-Safe Admin] window.supabase is not available. CDN may have failed to load.');
         }
-    }
-    
-    if (url && key) {
-        document.getElementById('supa-url').value = url;
-        document.getElementById('supa-key').value = key;
-        try {
-            supabase = window.supabase.createClient(url, key);
-        } catch (e) {
-            console.error('Supabase initialization failed', e);
-        }
+    } catch (e) {
+        console.error('[V-Safe Admin] Supabase init failed:', e);
     }
 }
 
-// Setup Event Listeners
-function setupEventListeners() {
-    // Navigation
-    navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
+// ============================================
+// Navigation
+// ============================================
+function setupNavigation() {
+    document.querySelectorAll('.nav-item').forEach(function (item) {
+        item.addEventListener('click', function (e) {
             e.preventDefault();
-            const tab = item.getAttribute('data-tab');
-            switchTab(tab);
+            var tab = this.getAttribute('data-tab');
+            if (tab) switchTab(tab);
+        });
+    });
+}
+
+function switchTab(tabId) {
+    currentTab = tabId;
+
+    // Update nav active state
+    document.querySelectorAll('.nav-item').forEach(function (item) {
+        if (item.getAttribute('data-tab') === tabId) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    // Update tab content visibility
+    document.querySelectorAll('.tab-content').forEach(function (tab) {
+        if (tab.id === tabId + '-tab') {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+
+    // Update page title
+    var title = document.getElementById('page-title');
+    if (title) {
+        title.textContent = tabId.charAt(0).toUpperCase() + tabId.slice(1);
+    }
+}
+
+// ============================================
+// Modals
+// ============================================
+function setupModals() {
+    var uploadModal = document.getElementById('upload-modal');
+    var videoModal = document.getElementById('video-modal');
+
+    var openUploadBtn = document.getElementById('open-upload-modal');
+    var openVideoBtn = document.getElementById('open-video-modal');
+
+    if (openUploadBtn && uploadModal) {
+        openUploadBtn.addEventListener('click', function () {
+            uploadModal.classList.add('active');
+        });
+    }
+
+    if (openVideoBtn && videoModal) {
+        openVideoBtn.addEventListener('click', function () {
+            videoModal.classList.add('active');
+        });
+    }
+
+    // Close buttons
+    document.querySelectorAll('.close-modal').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (uploadModal) uploadModal.classList.remove('active');
+            if (videoModal) videoModal.classList.remove('active');
         });
     });
 
-    // Modals
-    document.getElementById('open-upload-modal').onclick = () => uploadModal.classList.add('active');
-    document.getElementById('open-video-modal').onclick = () => videoModal.classList.add('active');
-    
-    document.querySelectorAll('.close-modal').forEach(btn => {
-        btn.onclick = () => {
-            uploadModal.classList.remove('active');
-            videoModal.classList.remove('active');
-        };
+    // Close on backdrop click
+    [uploadModal, videoModal].forEach(function (modal) {
+        if (modal) {
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        }
     });
+}
 
-    // Config Form
-    configForm.onsubmit = (e) => {
+// ============================================
+// Settings / Config Form
+// ============================================
+function setupConfigForm() {
+    var form = document.getElementById('config-form');
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
         e.preventDefault();
-        const url = document.getElementById('supa-url').value;
-        const key = document.getElementById('supa-key').value;
-        localStorage.setItem('supa_url', url);
-        localStorage.setItem('supa_key', key);
+        var url = document.getElementById('supa-url').value.trim();
+        var key = document.getElementById('supa-key').value.trim();
+
+        if (!url || !key) {
+            alert('Please fill in both URL and Key.');
+            return;
+        }
+
+        try {
+            localStorage.setItem('supa_url', url);
+            localStorage.setItem('supa_key', key);
+        } catch (err) {
+            console.warn('Could not save to localStorage');
+        }
+
         alert('Configuration saved! Refreshing...');
         window.location.reload();
-    };
+    });
+}
 
-    // File Upload handling
-    dropArea.onclick = () => fileInput.click();
-    
-    fileInput.onchange = () => {
-        const file = fileInput.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                filePreview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+// ============================================
+// Image Upload Form
+// ============================================
+function setupUploadForm() {
+    var form = document.getElementById('upload-form');
+    var fileInput = document.getElementById('file-input');
+    var dropArea = document.getElementById('drop-area');
+    var filePreview = document.getElementById('file-preview');
+
+    if (!form || !fileInput || !dropArea) return;
+
+    // Click to select file
+    dropArea.addEventListener('click', function () {
+        fileInput.click();
+    });
+
+    // Show preview when file selected
+    fileInput.addEventListener('change', function () {
+        var file = fileInput.files[0];
+        if (file && filePreview) {
+            var reader = new FileReader();
+            reader.onload = function (ev) {
+                filePreview.innerHTML = '<img src="' + ev.target.result + '" alt="Preview">';
             };
             reader.readAsDataURL(file);
         }
-    };
+    });
 
-    // Upload Form Submit
-    uploadForm.onsubmit = async (e) => {
+    // Submit
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
-        if (!supabase) return alert('Config Supabase first');
-        
-        const title = document.getElementById('img-title').value;
-        const category = document.getElementById('img-category').value;
-        const file = fileInput.files[0];
-        
-        if (!file) return alert('Please select a file');
 
-        const submitBtn = document.getElementById('submit-upload');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Uploading...';
+        if (!sbClient) {
+            alert('Please configure Supabase first (go to Settings tab).');
+            return;
+        }
+
+        var title = document.getElementById('img-title').value.trim();
+        var category = document.getElementById('img-category').value;
+        var file = fileInput.files[0];
+
+        if (!file) {
+            alert('Please select an image file.');
+            return;
+        }
+
+        var submitBtn = document.getElementById('submit-upload');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Uploading...';
+        }
 
         try {
             // 1. Upload to Storage
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `gallery/${fileName}`;
+            var fileExt = file.name.split('.').pop();
+            var fileName = Date.now() + '_' + Math.random().toString(36).substring(7) + '.' + fileExt;
+            var filePath = 'gallery/' + fileName;
 
-            let { error: uploadError, data } = await supabase.storage
+            var uploadResult = await sbClient.storage
                 .from('gallery')
                 .upload(filePath, file);
 
-            if (uploadError) throw uploadError;
+            if (uploadResult.error) throw uploadResult.error;
 
             // 2. Get Public URL
-            const { data: { publicUrl } } = supabase.storage
+            var urlResult = sbClient.storage
                 .from('gallery')
                 .getPublicUrl(filePath);
 
+            var publicUrl = urlResult.data.publicUrl;
+
             // 3. Save to Database
-            const { error: dbError } = await supabase
+            var dbResult = await sbClient
                 .from('site_images')
                 .insert([{
                     name: title,
@@ -153,29 +278,52 @@ function setupEventListeners() {
                     is_video: false
                 }]);
 
-            if (dbError) throw dbError;
+            if (dbResult.error) throw dbResult.error;
 
-            alert('Uploaded successfully!');
-            uploadModal.classList.remove('active');
-            uploadForm.reset();
-            filePreview.innerHTML = '';
+            alert('Image uploaded successfully!');
+            var uploadModal = document.getElementById('upload-modal');
+            if (uploadModal) uploadModal.classList.remove('active');
+            form.reset();
+            if (filePreview) filePreview.innerHTML = '';
             refreshData();
-        } catch (error) {
-            alert('Error: ' + error.message);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Upload to Supabase';
-        }
-    };
 
-    // Video Form Submit
-    videoForm.onsubmit = async (e) => {
+        } catch (error) {
+            console.error('[V-Safe Admin] Upload error:', error);
+            alert('Upload error: ' + (error.message || JSON.stringify(error)));
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Upload to Supabase';
+            }
+        }
+    });
+}
+
+// ============================================
+// Video Form
+// ============================================
+function setupVideoForm() {
+    var form = document.getElementById('video-form');
+    if (!form) return;
+
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
-        const title = document.getElementById('video-title').value;
-        const url = document.getElementById('video-url').value;
+
+        if (!sbClient) {
+            alert('Please configure Supabase first (go to Settings tab).');
+            return;
+        }
+
+        var title = document.getElementById('video-title').value.trim();
+        var url = document.getElementById('video-url').value.trim();
+
+        if (!title || !url) {
+            alert('Please fill in both title and URL.');
+            return;
+        }
 
         try {
-            const { error } = await supabase
+            var result = await sbClient
                 .from('site_images')
                 .insert([{
                     name: title,
@@ -184,157 +332,184 @@ function setupEventListeners() {
                     is_video: true
                 }]);
 
-            if (error) throw error;
-            alert('Video link saved!');
-            videoModal.classList.remove('active');
-            videoForm.reset();
-            refreshData();
-        } catch (error) {
-            alert('Error: ' + error.message);
-        }
-    };
+            if (result.error) throw result.error;
 
-    // Filter handling
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.onclick = () => {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            alert('Video link saved!');
+            var videoModal = document.getElementById('video-modal');
+            if (videoModal) videoModal.classList.remove('active');
+            form.reset();
+            refreshData();
+
+        } catch (error) {
+            console.error('[V-Safe Admin] Video save error:', error);
+            alert('Error: ' + (error.message || JSON.stringify(error)));
+        }
+    });
+}
+
+// ============================================
+// Filter Buttons
+// ============================================
+function setupFilters() {
+    document.querySelectorAll('.filter-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.filter-btn').forEach(function (b) {
+                b.classList.remove('active');
+            });
             btn.classList.add('active');
             renderGallery(btn.getAttribute('data-category'));
-        };
+        });
     });
 }
 
-// Switch Tabs
-function switchTab(tabId) {
-    currentTab = tabId;
-    navItems.forEach(item => {
-        item.classList.toggle('active', item.getAttribute('data-tab') === tabId);
-    });
-    tabContents.forEach(tab => {
-        tab.classList.toggle('active', tab.id === `${tabId}-tab`);
-    });
-    pageTitle.textContent = tabId.charAt(0).toUpperCase() + tabId.slice(1);
-}
-
-// Refresh all data
+// ============================================
+// Data Loading
+// ============================================
 async function refreshData() {
-    if (!supabase) return;
+    if (!sbClient) return;
 
     try {
-        const { data, error } = await supabase
+        var result = await sbClient
             .from('site_images')
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (result.error) throw result.error;
 
-        galleryItems = data.filter(item => !item.is_video);
-        videoItems = data.filter(item => item.is_video || item.category === 'training-videos');
+        var data = result.data || [];
+        galleryItems = data.filter(function (item) { return !item.is_video; });
+        videoItems = data.filter(function (item) { return item.is_video || item.category === 'training-videos'; });
+
+        console.log('[V-Safe Admin] Loaded ' + galleryItems.length + ' images, ' + videoItems.length + ' videos.');
 
         updateDashboard();
         renderGallery('all');
         renderVideos();
+
     } catch (err) {
-        console.error('Fetch error:', err);
+        console.error('[V-Safe Admin] Fetch error:', err);
     }
 }
 
+// ============================================
+// Dashboard
+// ============================================
 function updateDashboard() {
-    document.getElementById('total-images').textContent = galleryItems.length;
-    document.getElementById('total-videos').textContent = videoItems.length;
-    
-    const recentGrid = document.getElementById('recent-grid');
+    var totalImages = document.getElementById('total-images');
+    var totalVideos = document.getElementById('total-videos');
+    if (totalImages) totalImages.textContent = galleryItems.length;
+    if (totalVideos) totalVideos.textContent = videoItems.length;
+
+    var recentGrid = document.getElementById('recent-grid');
+    if (!recentGrid) return;
+
     if (galleryItems.length === 0) {
         recentGrid.innerHTML = '<div class="empty-state">No uploads yet.</div>';
         return;
     }
 
-    recentGrid.innerHTML = galleryItems.slice(0, 4).map(item => `
-        <div class="gallery-card">
-            <img src="${item.url}" class="card-img" alt="${item.name}">
-            <div class="card-body">
-                <h4>${item.name}</h4>
-                <span class="card-tag">${item.category}</span>
-            </div>
-        </div>
-    `).join('');
+    recentGrid.innerHTML = galleryItems.slice(0, 4).map(function (item) {
+        return '<div class="gallery-card">' +
+            '<img src="' + item.url + '" class="card-img" alt="' + (item.name || '') + '">' +
+            '<div class="card-body">' +
+                '<h4>' + (item.name || 'Untitled') + '</h4>' +
+                '<span class="card-tag">' + (item.category || '') + '</span>' +
+            '</div>' +
+        '</div>';
+    }).join('');
 }
 
-function renderGallery(filter = 'all') {
-    const grid = document.getElementById('gallery-grid');
-    const filtered = filter === 'all' 
-        ? galleryItems 
-        : galleryItems.filter(i => i.category === filter);
+// ============================================
+// Gallery Rendering
+// ============================================
+function renderGallery(filter) {
+    var grid = document.getElementById('gallery-grid');
+    if (!grid) return;
+
+    var filtered = (filter === 'all')
+        ? galleryItems
+        : galleryItems.filter(function (i) { return i.category === filter; });
 
     if (filtered.length === 0) {
         grid.innerHTML = '<div class="empty-state">No images found in this category.</div>';
         return;
     }
 
-    grid.innerHTML = filtered.map(item => `
-        <div class="gallery-card">
-            <img src="${item.url}" class="card-img" alt="${item.name}">
-            <div class="card-body">
-                <h4>${item.name}</h4>
-                <span class="card-tag">${item.category}</span>
-            </div>
-            <div class="card-actions">
-                <button class="action-btn delete" onclick="deleteItem('${item.id}', '${item.url}')">
-                    <i data-lucide="trash-2"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
-    lucide.createIcons();
+    grid.innerHTML = filtered.map(function (item) {
+        return '<div class="gallery-card">' +
+            '<img src="' + item.url + '" class="card-img" alt="' + (item.name || '') + '">' +
+            '<div class="card-body">' +
+                '<h4>' + (item.name || 'Untitled') + '</h4>' +
+                '<span class="card-tag">' + (item.category || '') + '</span>' +
+            '</div>' +
+            '<div class="card-actions">' +
+                '<button class="action-btn delete" onclick="deleteItem(\'' + item.id + '\', \'' + item.url + '\')">' +
+                    '&#128465;' +
+                '</button>' +
+            '</div>' +
+        '</div>';
+    }).join('');
+
+    // Re-render lucide icons if available
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
 }
 
+// ============================================
+// Videos Rendering
+// ============================================
 function renderVideos() {
-    const grid = document.getElementById('video-grid');
+    var grid = document.getElementById('video-grid');
+    if (!grid) return;
+
     if (videoItems.length === 0) {
         grid.innerHTML = '<div class="empty-state">No videos found.</div>';
         return;
     }
 
-    grid.innerHTML = videoItems.map(item => `
-        <div class="gallery-card">
-            <div class="card-img" style="background: #1e293b; display: flex; align-items: center; justify-content: center; color: white;">
-                <i data-lucide="video" style="width: 48px; height: 48px;"></i>
-            </div>
-            <div class="card-body">
-                <h4>${item.name}</h4>
-                <a href="${item.url}" target="_blank" style="font-size: 0.7rem; color: #3b82f6; text-decoration: none; word-break: break-all;">${item.url}</a>
-            </div>
-            <div class="card-actions">
-                <button class="action-btn delete" onclick="deleteItem('${item.id}')">
-                    <i data-lucide="trash-2"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
-    lucide.createIcons();
+    grid.innerHTML = videoItems.map(function (item) {
+        return '<div class="gallery-card">' +
+            '<div class="card-img" style="background:#1e293b;display:flex;align-items:center;justify-content:center;color:white;font-size:2rem;">&#9658;</div>' +
+            '<div class="card-body">' +
+                '<h4>' + (item.name || 'Untitled') + '</h4>' +
+                '<a href="' + item.url + '" target="_blank" style="font-size:0.7rem;color:#3b82f6;text-decoration:none;word-break:break-all;">' + item.url + '</a>' +
+            '</div>' +
+            '<div class="card-actions">' +
+                '<button class="action-btn delete" onclick="deleteItem(\'' + item.id + '\')">' +
+                    '&#128465;' +
+                '</button>' +
+            '</div>' +
+        '</div>';
+    }).join('');
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
 }
 
+// ============================================
+// Delete Item
+// ============================================
 async function deleteItem(id, url) {
     if (!confirm('Are you sure you want to delete this?')) return;
+    if (!sbClient) {
+        alert('Supabase not connected.');
+        return;
+    }
 
     try {
-        // Delete from DB
-        const { error: dbError } = await supabase
+        var result = await sbClient
             .from('site_images')
             .delete()
             .eq('id', id);
 
-        if (dbError) throw dbError;
+        if (result.error) throw result.error;
 
-        // If it's an image, we should ideally delete from storage too
-        // But we need the file path. For now, DB deletion is primary.
-
-        alert('Deleted successfully');
+        alert('Deleted successfully!');
         refreshData();
     } catch (err) {
-        alert('Delete failed: ' + err.message);
+        console.error('[V-Safe Admin] Delete error:', err);
+        alert('Delete failed: ' + (err.message || JSON.stringify(err)));
     }
 }
-
-// Start app
-document.addEventListener('DOMContentLoaded', init);
