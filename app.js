@@ -538,27 +538,35 @@ function renderVideos() {
 }
 
 // ============================================
-// Delete Item
+// Delete Item - Exposed to window for onclick
 // ============================================
-async function deleteItem(id, url) {
+window.deleteItem = async function(id, url) {
     if (!confirm('Are you sure you want to delete this?')) return;
+    
     if (!sbClient) {
-        alert('Supabase not connected.');
+        alert('Error: Supabase client not initialized. Please check your settings.');
         return;
     }
 
+    console.log('[V-Safe Admin] Attempting to delete ID:', id);
+
     try {
-        var result = await sbClient
+        // Delete from site_images table
+        const { error } = await sbClient
             .from('site_images')
             .delete()
             .eq('id', id);
 
-        if (result.error) throw result.error;
+        if (error) {
+            console.error('[V-Safe Admin] Supabase Delete Error:', error);
+            throw error;
+        }
 
         alert('Deleted successfully!');
         refreshData();
+        
     } catch (err) {
-        console.error('[V-Safe Admin] Delete error:', err);
-        alert('Delete failed: ' + (err.message || JSON.stringify(err)));
+        console.error('[V-Safe Admin] Delete catch:', err);
+        alert('Delete failed: ' + (err.message || 'Check browser console for details'));
     }
-}
+};
