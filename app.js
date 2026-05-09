@@ -30,12 +30,17 @@ document.addEventListener('DOMContentLoaded', function () {
     initSupabase();
 
     // Setup all event listeners
+    setupLogin();
     setupNavigation();
     setupModals();
     setupConfigForm();
     setupUploadForm();
     setupVideoForm();
     setupFilters();
+    setupLogout();
+
+    // Check session
+    checkSession();
 
     // Load data if connected
     if (sbClient) {
@@ -82,6 +87,53 @@ function initSupabase() {
         }
     } catch (e) {
         console.error('[V-Safe Admin] Supabase init failed:', e);
+    }
+}
+
+    }
+}
+
+// ============================================
+// Authentication (Login/Logout)
+// ============================================
+function setupLogin() {
+    const loginForm = document.getElementById('login-form');
+    const loginError = document.getElementById('login-error');
+    if (!loginForm) return;
+
+    loginForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        // User provided credentials
+        if (email === 'admin@vsafe.com' && password === 'admin@2026') {
+            sessionStorage.setItem('vsafe_auth', 'true');
+            document.getElementById('login-overlay').style.display = 'none';
+            if (sbClient) refreshData();
+        } else {
+            loginError.textContent = 'Invalid email or password. Please try again.';
+        }
+    });
+}
+
+function checkSession() {
+    const isAuth = sessionStorage.getItem('vsafe_auth');
+    const overlay = document.getElementById('login-overlay');
+    if (isAuth === 'true') {
+        if (overlay) overlay.style.display = 'none';
+    } else {
+        if (overlay) overlay.style.display = 'flex';
+    }
+}
+
+function setupLogout() {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            sessionStorage.removeItem('vsafe_auth');
+            window.location.reload();
+        });
     }
 }
 

@@ -14,6 +14,30 @@
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-card">
+            <div class="login-header">
+                <i data-lucide="shield-check"></i>
+                <h2>V-Safe Admin Login</h2>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="login-email" required placeholder="admin@vsafe.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                    Login to Portal
+                </button>
+            </form>
+            <p id="login-error" class="login-error"></p>
+        </div>
+    </div>
+
     <div class="admin-container">
         <!-- Sidebar -->
         <aside class="sidebar">
