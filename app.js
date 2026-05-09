@@ -541,32 +541,31 @@ function renderVideos() {
 // Delete Item - Exposed to window for onclick
 // ============================================
 window.deleteItem = async function(id, url) {
-    if (!confirm('Are you sure you want to delete this?')) return;
+    console.log('[V-Safe Admin] Delete button clicked for ID:', id);
+    
+    if (!confirm('Are you sure you want to delete this item?')) return;
     
     if (!sbClient) {
-        alert('Error: Supabase client not initialized. Please check your settings.');
+        alert('Error: Supabase not connected. Please check Settings.');
         return;
     }
 
-    console.log('[V-Safe Admin] Attempting to delete ID:', id);
-
     try {
-        // Delete from site_images table
+        // Force ID to number (important for int8 columns)
+        const numericId = Number(id);
+        
         const { error } = await sbClient
             .from('site_images')
             .delete()
-            .eq('id', id);
+            .eq('id', numericId);
 
-        if (error) {
-            console.error('[V-Safe Admin] Supabase Delete Error:', error);
-            throw error;
-        }
+        if (error) throw error;
 
         alert('Deleted successfully!');
         refreshData();
         
     } catch (err) {
-        console.error('[V-Safe Admin] Delete catch:', err);
-        alert('Delete failed: ' + (err.message || 'Check browser console for details'));
+        console.error('[V-Safe Admin] Delete Error:', err);
+        alert('Delete failed: ' + (err.message || 'Unknown error'));
     }
 };
