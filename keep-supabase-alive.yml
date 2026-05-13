@@ -1,0 +1,28 @@
+name: Keep Supabase Alive
+
+# Runs every 5 days to prevent Supabase free tier from pausing (pauses after 7 days of inactivity)
+on:
+  schedule:
+    - cron: '0 8 */5 * *'  # Every 5 days at 8:00 AM UTC
+  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        run: |
+          echo "Pinging Supabase to keep it alive..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://doqquwlomcaqtabwrqpy.supabase.co/rest/v1/site_images?select=id&limit=1" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvcXF1d2xvbWNhcXRhYndycXB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNTQ4NTcsImV4cCI6MjA5MzkzMDg1N30.bSX1gqAcR61yF_UXfXxrmNIi4P756fvU7D9WZzRQ4Dk" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvcXF1d2xvbWNhcXRhYndycXB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNTQ4NTcsImV4cCI6MjA5MzkzMDg1N30.bSX1gqAcR61yF_UXfXxrmNIi4P756fvU7D9WZzRQ4Dk")
+          
+          echo "Response code: $RESPONSE"
+          
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "✅ Supabase is alive and responding!"
+          else
+            echo "⚠️ Supabase returned status $RESPONSE"
+            exit 1
+          fi
